@@ -1,4 +1,4 @@
-from flask import request, g, url_for, current_app
+from flask import g, url_for, current_app
 from flask_restful import Resource, reqparse
 from .. import db
 from ..models import Post, Permission
@@ -7,7 +7,7 @@ from .decorators import permission_required
 from .errors import forbidden
 
 
-class GetPosts(Resource):
+class PostsView(Resource):
     def __init__(self):
         self.parser = reqparse.RequestParser()
         self.parser.add_argument('page', default=1, type=int, location='args')
@@ -23,10 +23,10 @@ class GetPosts(Resource):
         posts = pagination.items
         prev = None
         if pagination.has_prev:
-            prev = url_for('api.get_posts', page=page - 1)
+            prev = url_for('api.posts_view', page=page - 1)
         next = None
         if pagination.has_next:
-            next = url_for('api.get_posts', page=page + 1)
+            next = url_for('api.posts_view', page=page + 1)
         return {
             'posts': [post.to_json() for post in posts],
             'prev': prev,
@@ -42,10 +42,10 @@ class GetPosts(Resource):
         db.session.add(post)
         db.session.commit()
         return post.to_json(), 201,\
-               {'Location': url_for('api.get_post', id=post.id)}
+               {'Location': url_for('api.post_view', id=post.id)}
 
 
-class GetPost(Resource):
+class PostView(Resource):
     def __init__(self):
         self.parser = reqparse.RequestParser()
         self.parser.add_argument('body', type=str, location='json')
@@ -68,6 +68,6 @@ class GetPost(Resource):
         return post.to_json()
 
 
-restful.add_resource(GetPosts, '/posts/', endpoint='get_posts')
-restful.add_resource(GetPost, '/posts/<int:id>', endpoint='get_post')
+restful.add_resource(PostsView, '/posts/', endpoint='posts_view')
+restful.add_resource(PostView, '/posts/<int:id>', endpoint='post_view')
 

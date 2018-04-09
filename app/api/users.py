@@ -1,16 +1,41 @@
-from flask import current_app, url_for
+from flask import current_app, url_for, abort
 from flask_restful import Resource, reqparse
 from . import restful
-from ..models import User, Post
+from ..models import User, Post, db
 
 
-class GetUser(Resource):
+class UserView(Resource):
+    def __init__(self):
+        self.parser = reqparse.RequestParser()
+        self.parser.add_argument('email', type=str, location='json')
+        self.parser.add_argument('password', type=str, location='json')
+        super().__init__()
+
     def get(self, id):
         user = User.query.get_or_404(id)
         return user.to_json()
 
+    def post(self):
+        args = self.parser.parse_args()
+        email = args.get('email')
+        password = args.get('password')
+        if email is None or password is None:
+            abort(400)
+        if User.query.filter_by(email=email).first() is not None:
+            abort(400)
+        user = User(email=email, password=password)
+        db.session.add(user)
+        db.session.commit()
+        return user.to_json(), 201,\
+               {'Location': url_for('api.user_view', id=user.id)}
 
-class GetUserPosts(Resource):
+    def put(self, id):
+        pass
+
+
+
+
+class UserPostsView(Resource):
     def __init__(self):
         self.parser = reqparse.RequestParser()
         self.parser.add_argument('page', default=1, type=int, location='args')
@@ -25,10 +50,10 @@ class GetUserPosts(Resource):
         posts = pagination.items
         prev = None
         if pagination.has_prev:
-            prev = url_for('api.get_user_posts', id=id, page=page - 1)
+            prev = url_for('api.user_posts_view', id=id, page=page - 1)
         next = None
         if pagination.has_next:
-            next = url_for('api.get_user_posts', id=id, page=page + 1)
+            next = url_for('api.user_posts_view', id=id, page=page + 1)
         return {
             'posts': [post.to_json() for post in posts],
             'prev': prev,
@@ -37,7 +62,7 @@ class GetUserPosts(Resource):
         }
 
 
-class GetUserFollowedPosts(Resource):
+class UserFollowedPostsView(Resource):
     def __init__(self):
         self.parser = reqparse.RequestParser()
         self.parser.add_argument('page', default=1, type=int, location='args')
@@ -52,10 +77,10 @@ class GetUserFollowedPosts(Resource):
         posts = pagination.items
         prev = None
         if pagination.has_prev:
-            prev = url_for('api.get_user_followed_posts', id=id, page=page - 1)
+            prev = url_for('api.user_followed_posts_view', id=id, page=page - 1)
         next = None
         if pagination.has_next:
-            next = url_for('api.get_user_followed_posts', id=id, page=page + 1)
+            next = url_for('api.user_followed_posts_view', id=id, page=page + 1)
         return {
             'posts': [post.to_json() for post in posts],
             'prev': prev,
@@ -64,6 +89,6 @@ class GetUserFollowedPosts(Resource):
         }
 
 
-restful.add_resource(GetUser, '/users/<int:id>', endpoint='get_user')
-restful.add_resource(GetUserPosts, '/users/<int:id>/posts/', endpoint='get_user_posts')
-restful.add_resource(GetUserFollowedPosts, '/users/<int:id>/timeline/', endpoint='get_user_followed_posts')
+restful.add_resource(UserView, '/users', '/users/<int:id>', endpoint='user_view')
+restful.add_resource(UserPostsView, '/users/<int:id>/posts/', endpoint='user_posts_view')
+restful.add_resource(UserFollowedPostsView, '/users/<int:id>/timeline/', endpoint='user_followed_posts_view')

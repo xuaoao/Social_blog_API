@@ -13,7 +13,6 @@ def users(count=100):
                  username=fake.user_name(),
                  password='password',
                  confirmed=True,
-                 name=fake.name(),
                  location=fake.city(),
                  about_me=fake.text(),
                  member_since=fake.past_date())

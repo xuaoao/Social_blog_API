@@ -1,13 +1,12 @@
 from datetime import datetime
 import hashlib
-from werkzeug.security import generate_password_hash, check_password_hash
+from passlib.apps import custom_app_context as pwd_context
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from markdown import markdown
 import bleach
-from flask import current_app, request, url_for
-from flask_login import UserMixin, AnonymousUserMixin
+from flask import current_app, url_for
 from app.exceptions import ValidationError
-from . import db, login_manager
+from . import db
 
 
 class Permission:
@@ -80,7 +79,7 @@ class Follow(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(64), unique=True, index=True)
@@ -88,7 +87,6 @@ class User(UserMixin, db.Model):
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'))
     password_hash = db.Column(db.String(128))
     confirmed = db.Column(db.Boolean, default=False)
-    name = db.Column(db.String(64))
     location = db.Column(db.String(64))
     about_me = db.Column(db.Text())
     member_since = db.Column(db.DateTime(), default=datetime.utcnow)
@@ -136,10 +134,10 @@ class User(UserMixin, db.Model):
 
     @password.setter
     def password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = pwd_context.encrypt(password)
 
     def verify_password(self, password):
-        return check_password_hash(self.password_hash, password)
+        return pwd_context.verify(password, self.password_hash)
 
     def generate_confirmation_token(self, expiration=3600):
         s = Serializer(current_app.config['SECRET_KEY'], expiration)
@@ -250,14 +248,16 @@ class User(UserMixin, db.Model):
 
     def to_json(self):
         json_user = {
-            'url': url_for('api.get_user', id=self.id),
+            'url': url_for('api.user_view', id=self.id),
             'username': self.username,
             'member_since': self.member_since.__str__(),
             'last_seen': self.last_seen.__str__(),
-            'posts_url': url_for('api.get_user_posts', id=self.id),
-            'followed_posts_url': url_for('api.get_user_followed_posts',
+            'posts_url': url_for('api.user_posts_view', id=self.id),
+            'followed_posts_url': url_for('api.user_followed_posts_view',
                                           id=self.id),
-            'post_count': self.posts.count()
+            'post_count': self.posts.count(),
+            'location': self.location,
+            'about_me': self.about_me,
         }
         return json_user
 
@@ -277,21 +277,6 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return '<User %r>' % self.username
-
-
-class AnonymousUser(AnonymousUserMixin):
-    def can(self, permissions):
-        return False
-
-    def is_administrator(self):
-        return False
-
-login_manager.anonymous_user = AnonymousUser
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
 
 class Post(db.Model):
@@ -315,13 +300,13 @@ class Post(db.Model):
 
     def to_json(self):
         json_post = {
-            'url': url_for('api.get_post', id=self.id),
+            'url': url_for('api.post_view', id=self.id),
             'title': self.title,
             'body': self.body,
             'body_html': self.body_html,
             'timestamp': self.timestamp.__str__(),
-            'author_url': url_for('api.get_user', id=self.author_id),
-            'comments_url': url_for('api.get_post_comments', id=self.id),
+            'author_url': url_for('api.user_view', id=self.author_id),
+            'comments_url': url_for('api.post_comments_view', id=self.id),
             'comment_count': self.comments.count()
         }
         return json_post
@@ -360,18 +345,18 @@ class Comment(db.Model):
 
     def to_json(self):
         json_comment = {
-            'url': url_for('api.get_comment', id=self.id),
-            'post_url': url_for('api.get_post', id=self.post_id),
+            'url': url_for('api.comment_view', id=self.id),
+            'post_url': url_for('api.post_view', id=self.post_id),
             'body': self.body,
             'body_html': self.body_html,
             'timestamp': self.timestamp.__str__(),
-            'author_url': url_for('api.get_user', id=self.author_id),
+            'author_url': url_for('api.user_view', id=self.author_id),
         }
         return json_comment
 
     @staticmethod
-    def from_json(json_comment):
-        body = json_comment.get('body')
+    def from_json(args):
+        body = args.get('body')
         if body is None or body == '':
             raise ValidationError('comment does not have a body')
         return Comment(body=body)

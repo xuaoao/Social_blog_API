@@ -1,7 +1,8 @@
-from flask import g, jsonify
+from flask import g
 from flask_httpauth import HTTPBasicAuth
+from flask_restful import Resource
 from ..models import User
-from . import api
+from . import api, restful
 from .errors import unauthorized, forbidden
 
 auth = HTTPBasicAuth()
@@ -28,17 +29,20 @@ def auth_error():
     return unauthorized('Invalid credentials')
 
 
-@api.before_request
-@auth.login_required
-def before_request():
-    if not g.current_user.is_anonymous and \
-            not g.current_user.confirmed:
-        return forbidden('Unconfirmed account')
+# @api.before_request
+# @auth.login_required
+# def before_request():
+#     if not g.current_user.confirmed:
+#         return forbidden('Unconfirmed account')
 
 
-@api.route('/tokens/', methods=['POST'])
-def get_token():
-    if g.current_user.is_anonymous or g.token_used:
-        return unauthorized('Invalid credentials')
-    return jsonify({'token': g.current_user.generate_auth_token(
-        expiration=3600), 'expiration': 3600})
+class TokenView(Resource):
+    def post(self):
+        if g.token_used:
+            return unauthorized('Invalid credentials')
+        return {'token': g.current_user.generate_auth_token(
+            expiration=3600), 'expiration': 3600}
+
+
+restful.add_resource(TokenView, '/tokens/', endpoint='token_view')
+
