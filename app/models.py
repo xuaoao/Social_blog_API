@@ -252,8 +252,8 @@ class User(UserMixin, db.Model):
         json_user = {
             'url': url_for('api.get_user', id=self.id),
             'username': self.username,
-            'member_since': self.member_since,
-            'last_seen': self.last_seen,
+            'member_since': self.member_since.__str__(),
+            'last_seen': self.last_seen.__str__(),
             'posts_url': url_for('api.get_user_posts', id=self.id),
             'followed_posts_url': url_for('api.get_user_followed_posts',
                                           id=self.id),
@@ -319,7 +319,7 @@ class Post(db.Model):
             'title': self.title,
             'body': self.body,
             'body_html': self.body_html,
-            'timestamp': self.timestamp,
+            'timestamp': self.timestamp.__str__(),
             'author_url': url_for('api.get_user', id=self.author_id),
             'comments_url': url_for('api.get_post_comments', id=self.id),
             'comment_count': self.comments.count()
@@ -327,11 +327,14 @@ class Post(db.Model):
         return json_post
 
     @staticmethod
-    def from_json(json_post):
-        body = json_post.get('body')
+    def from_json(args):
+        body = args.get('body')
         if body is None or body == '':
             raise ValidationError('post does not have a body')
-        return Post(body=body)
+        title = args.get('title')
+        if title is None or title == '':
+            raise ValidationError('post does not have a title')
+        return Post(title=title, body=body)
 
 
 db.event.listen(Post.body, 'set', Post.on_changed_body)
@@ -361,7 +364,7 @@ class Comment(db.Model):
             'post_url': url_for('api.get_post', id=self.post_id),
             'body': self.body,
             'body_html': self.body_html,
-            'timestamp': self.timestamp,
+            'timestamp': self.timestamp.__str__(),
             'author_url': url_for('api.get_user', id=self.author_id),
         }
         return json_comment
